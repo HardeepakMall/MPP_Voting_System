@@ -44,4 +44,12 @@ A complete web-based voting system built with **Google Apps Script** and **Googl
 4. Click **Deploy** and share the URL with students!
 
 ## 📸 Screenshots
-*(You can upload screenshots of your Login and Vote page here later)*
+
+### 1. Login Page
+![Login Screen](login-screen.png)
+
+### 2. Voting Grid
+![Voting Page](vote-screen.png)
+
+### 3. Admin Dashboard
+![Admin Dashboard](admin-screen.png)
