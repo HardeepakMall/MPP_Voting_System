@@ -1,0 +1,44 @@
+<div id="login-section" class="section active-section">
+  <div class="container d-flex justify-content-center align-items-center" style="height: 90vh;">
+    
+    <div class="card p-4 shadow-lg" style="width: 400px; border-top: 5px solid #003366;">
+      <div class="text-center mb-4">
+        <h3 id="login-title" style="color: #003366; font-weight: bold;">MPP VOTING</h3>
+        <p class="text-muted" id="login-subtitle">Student Login</p>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-bold">ID / Username</label>
+        <input type="text" id="username" class="form-control" placeholder="e.g. VASANTRA21">
+      </div>
+      <div class="mb-4">
+        <label class="form-label fw-bold">Password</label>
+        <div class="input-group">
+          <input type="password" id="password" class="form-control" placeholder="Enter Password">
+          <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility()">
+            <i class="bi bi-eye" id="toggle-icon"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="d-grid gap-2">
+        <button class="btn btn-success fw-bold" id="btn-login" onclick="handleLogin()">LOG IN</button>
+        <button class="btn btn-danger fw-bold" onclick="clearLoginFields()">CANCEL</button>
+      </div>
+
+      <div class="mt-3 text-center">
+         <span id="login-status" class="text-primary fw-bold"></span>
+         <span id="login-error" class="text-danger"></span>
+      </div>
+
+      <hr class="mt-4">
+      
+      <div class="text-center">
+        <a href="javascript:void(0)" onclick="toggleLoginMode()" id="admin-toggle-link" class="text-secondary small" style="text-decoration:none;">
+          <i class="bi bi-shield-lock"></i> Login as Administrator
+        </a>
+      </div>
+
+    </div>
+  </div>
+</div>

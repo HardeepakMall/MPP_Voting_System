@@ -1,0 +1,328 @@
+<script>
+  var currentUser = "";
+  var isAdmin = false; // Track if user is Admin
+  var hasVoted = false;
+  var allCandidates = [];
+
+  // --- UI HELPERS ---
+  function togglePasswordVisibility() {
+    var passInput = document.getElementById('password');
+    var icon = document.getElementById('toggle-icon');
+    if (passInput.type === "password") {
+      passInput.type = "text"; 
+      if(icon) { icon.classList.remove('bi-eye'); icon.classList.add('bi-eye-slash'); }
+    } else {
+      passInput.type = "password"; 
+      if(icon) { icon.classList.remove('bi-eye-slash'); icon.classList.add('bi-eye'); }
+    }
+  }
+
+  function clearLoginFields() {
+    document.getElementById('username').value = "";
+    document.getElementById('password').value = "";
+    document.getElementById('login-error').innerText = "";
+    document.getElementById('login-status').innerText = "";
+  }
+
+  // --- LOGIN MODE SWITCHER ---
+  function toggleLoginMode() {
+    var title = document.getElementById('login-title');
+    var sub = document.getElementById('login-subtitle');
+    var link = document.getElementById('admin-toggle-link');
+    var btn = document.getElementById('btn-login');
+
+    if (link.innerText.includes("Administrator")) {
+      // Switch to Admin
+      title.innerText = "ADMIN PANEL";
+      sub.innerText = "Authorized Personnel Only";
+      link.innerHTML = "<i class='bi bi-person'></i> Back to Student Login";
+      btn.innerText = "ADMIN LOGIN";
+      btn.classList.remove('btn-success');
+      btn.classList.add('btn-dark');
+      isAdmin = true;
+    } else {
+      // Switch to Student
+      title.innerText = "MPP VOTING";
+      sub.innerText = "Student Login";
+      link.innerHTML = "<i class='bi bi-shield-lock'></i> Login as Administrator";
+      btn.innerText = "LOG IN";
+      btn.classList.remove('btn-dark');
+      btn.classList.add('btn-success');
+      isAdmin = false;
+    }
+    clearLoginFields();
+  }
+
+  // --- HANDLE LOGIN ---
+  function handleLogin() {
+    var u = document.getElementById('username').value;
+    var p = document.getElementById('password').value;
+    
+    document.getElementById('login-error').innerText = "";
+    document.getElementById('login-status').innerText = "Verifying...";
+    
+    if (isAdmin) {
+      // Call ADMIN Login Function
+      google.script.run.withSuccessHandler(function(res) {
+        if(res.success) {
+           document.getElementById('login-status').innerText = "Admin Access Granted.";
+           setTimeout(function() {
+             document.getElementById('display-user').innerText = "Administrator";
+             document.getElementById('app-header').style.display = 'flex';
+             
+             // Hide Student Nav, Show Admin Page
+             document.getElementById('main-nav').style.display = 'none'; 
+             nav('admin-section');
+             loadAdminCharts(); // Load the graphs
+           }, 800);
+        } else {
+           document.getElementById('login-status').innerText = "";
+           document.getElementById('login-error').innerText = res.message;
+        }
+      }).loginAdmin(u, p);
+
+    } else {
+      // Call STUDENT Login Function (Existing)
+      google.script.run.withSuccessHandler(function(res) {
+        if (res.success) {
+          currentUser = res.username;
+          hasVoted = res.hasVoted;
+          document.getElementById('login-status').innerText = "Success! Redirecting...";
+          setTimeout(function() {
+               document.getElementById('display-user').innerText = currentUser;
+               document.getElementById('main-nav').style.display = 'block'; 
+               document.getElementById('app-header').style.display = 'flex'; 
+               document.getElementById('user-display-area').style.display = 'block';
+               updateStatusMessage();
+               loadCandidates();
+               nav('home-section'); 
+          }, 1000);
+        } else {
+          document.getElementById('login-status').innerText = "";
+          document.getElementById('login-error').innerText = res.message;
+        }
+      }).loginUser(u, p);
+    }
+  }
+
+  // --- NAVIGATION & LOGOUT ---
+  function nav(targetId) {
+    var sections = document.querySelectorAll('.section');
+    sections.forEach(function(s) { s.classList.remove('active-section'); });
+    var target = document.getElementById(targetId);
+    if(target) target.classList.add('active-section');
+    var navbarCollapse = document.getElementById('navbarNav');
+    if (navbarCollapse && navbarCollapse.classList.contains('show')) {
+        new bootstrap.Collapse(navbarCollapse).hide();
+    }
+  }
+
+  function logout() {
+    if (confirm("Are you sure you want to log out?")) {
+      document.body.innerHTML = "<div style='display:flex; justify-content:center; align-items:center; height:100vh;'><h3>Logging out...</h3></div>";
+      setTimeout(function() { location.reload(); }, 500);
+    }
+  }
+
+  // --- CHART RENDERING (ADMIN) ---
+  function loadAdminCharts() {
+    google.script.run.withSuccessHandler(renderCharts).getVoteResults();
+  }
+
+  function renderCharts(data) {
+    var container = document.getElementById('charts-container');
+    container.innerHTML = ""; // Clear loading text
+    
+    var grouped = groupBy(data, 'position');
+
+    // Create a chart for each Position
+    for (var pos in grouped) {
+      var candidates = grouped[pos];
+      var labels = candidates.map(c => c.name);
+      var votes = candidates.map(c => c.voteCount);
+      
+      // Dynamic HTML for Card + Canvas
+      var chartId = 'chart_' + pos.replace(/\s/g, '');
+      var html = `
+        <div class="col-md-6 mb-4">
+          <div class="card shadow">
+            <div class="card-header bg-dark text-white fw-bold">${pos}</div>
+            <div class="card-body">
+              <canvas id="${chartId}"></canvas>
+            </div>
+          </div>
+        </div>`;
+      container.insertAdjacentHTML('beforeend', html);
+
+      // Render Chart.js
+      new Chart(document.getElementById(chartId), {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: '# of Votes',
+            data: votes,
+            backgroundColor: [
+              'rgba(54, 162, 235, 0.6)',
+              'rgba(255, 99, 132, 0.6)',
+              'rgba(255, 206, 86, 0.6)',
+              'rgba(75, 192, 192, 0.6)',
+              'rgba(153, 102, 255, 0.6)'
+            ],
+            borderColor: [
+              'rgba(54, 162, 235, 1)',
+              'rgba(255, 99, 132, 1)',
+              'rgba(255, 206, 86, 1)',
+              'rgba(75, 192, 192, 1)',
+              'rgba(153, 102, 255, 1)'
+            ],
+            borderWidth: 1
+          }]
+        },
+        options: {
+          scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+        }
+      });
+    }
+  }
+
+  // --- STUDENT FUNCTIONS (Existing) ---
+  function updateStatusMessage() {
+    var msg = document.getElementById('vote-status-msg');
+    if (hasVoted) {
+      msg.className = "alert alert-warning w-75 mx-auto mb-4 shadow-sm";
+      msg.innerHTML = "<i class='bi bi-check-circle-fill'></i> <strong>You have already voted.</strong> Thank you.";
+    } else {
+      msg.className = "alert alert-success w-75 mx-auto mb-4 shadow-sm";
+      msg.innerHTML = "<i class='bi bi-info-circle-fill'></i> <strong>You are eligible to vote.</strong>";
+    }
+  }
+
+  function loadCandidates() {
+    google.script.run.withSuccessHandler(function(data) {
+      allCandidates = data;
+      renderCandidates(data);
+      renderBallot(data);
+    }).getCandidates();
+  }
+
+  function renderCandidates(data) {
+    var container = document.getElementById('candidates-display-area');
+    if(!container) return;
+    var grouped = groupBy(data, 'position');
+    var html = "";
+    for (var pos in grouped) {
+      html += '<div class="col-12 mt-5 mb-3"><h3 class="text-secondary border-bottom pb-2" style="font-weight: 700;">' + pos + '</h3></div>';
+      grouped[pos].forEach(function(c) {
+        html += `
+          <div class="col-md-4 mb-4">
+            <div class="card h-100 shadow border-0">
+              <div style="height: 250px; overflow: hidden; border-top-left-radius: 5px; border-top-right-radius: 5px;">
+                 <img src="${c.image}" class="w-100 h-100" style="object-fit: cover;" alt="${c.name}">
+              </div>
+              <div class="card-body text-center bg-white">
+                <h5 class="card-title text-primary fw-bold text-uppercase mb-1">${c.name}</h5>
+                <span class="badge bg-info text-dark mb-2">${c.course}</span>
+                <p class="card-text text-muted small">${c.position}</p>
+              </div>
+            </div>
+          </div>`;
+      });
+    }
+    container.innerHTML = html;
+  }
+
+  function renderBallot(data) {
+    var container = document.getElementById('voting-area');
+    if(!container) return;
+    if (hasVoted) {
+      container.innerHTML = `
+        <div class="alert alert-success text-center p-5 shadow-sm">
+          <h1 class="display-4"><i class="bi bi-check-circle-fill text-success"></i></h1>
+          <h4 class="alert-heading mt-3">Vote Successfully Submitted!</h4>
+          <p class="lead">Thank you for participating.</p>
+        </div>`;
+      var btn = document.querySelector('#voting-form button');
+      if(btn) btn.style.display = 'none';
+      return;
+    }
+    
+    var grouped = groupBy(data, 'position');
+    var html = "";
+    
+    for (var pos in grouped) {
+      html += `
+        <div class="card mb-5 shadow-sm border-0">
+          <div class="card-header text-white fw-bold py-3 text-uppercase text-center" style="background-color:#003366; letter-spacing:1px;">
+            ${pos}
+          </div>
+          <div class="card-body bg-light">
+            <div class="row">`;
+      grouped[pos].forEach(function(c) {
+        html += `
+          <div class="col-md-6 mb-3">
+            <div class="candidate-option d-flex align-items-center h-100" 
+                 onclick="selectCard(this, '${pos}', '${c.id}')">
+              <input class="form-check-input custom-radio" type="radio" name="${pos}" value="${c.id}" id="vote_${c.id}">
+              <div class="ms-3">
+                <span class="fw-bold h5 mb-0 d-block text-dark">${c.name}</span>
+                <span class="badge bg-secondary mt-1" style="font-weight:normal;">${c.course}</span>
+              </div>
+            </div>
+          </div>`;
+      });
+      html += `</div></div></div>`;
+    }
+    container.innerHTML = html;
+  }
+
+  function selectCard(cardDiv, groupName, candidateId) {
+    var radio = document.getElementById("vote_" + candidateId);
+    radio.checked = true;
+    var allCardsInGroup = document.getElementsByName(groupName);
+    allCardsInGroup.forEach(function(input) {
+      var parentCard = input.closest('.candidate-option');
+      if(parentCard) parentCard.classList.remove('selected-card');
+    });
+    cardDiv.classList.add('selected-card');
+  }
+
+  function submitBallot() {
+    if (hasVoted) return;
+    var positions = [...new Set(allCandidates.map(c => c.position))];
+    var selections = {};
+    var missing = [];
+
+    positions.forEach(function(pos) {
+      var selected = document.querySelector(`input[name="${pos}"]:checked`);
+      if (selected) selections[pos] = selected.value;
+      else missing.push(pos);
+    });
+
+    if (missing.length > 0) {
+      alert("Please select a candidate for: " + missing.join(", "));
+      return;
+    }
+
+    if (!confirm("Confirm Vote? This cannot be undone.")) return;
+
+    google.script.run.withSuccessHandler(function(res) {
+      if (res.success) {
+        hasVoted = true;
+        updateStatusMessage();
+        renderBallot(allCandidates);
+        alert("Success! Your vote has been recorded.");
+        nav('vote-section');
+      } else {
+        alert("Error: " + res.message);
+      }
+    }).submitVote(currentUser, selections);
+  }
+
+  function groupBy(xs, key) {
+    return xs.reduce(function(rv, x) {
+      (rv[x[key]] = rv[x[key]] || []).push(x);
+      return rv;
+    }, {});
+  }
+</script>
